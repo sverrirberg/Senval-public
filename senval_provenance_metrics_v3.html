@@ -1,0 +1,874 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Senval Code Provenance Map – Prototype</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --card-bg: #ffffff;
+      --border-subtle: #e1e4ea;
+      --text-main: #111827;
+      --text-muted: #6b7280;
+      --accent-human: #22c55e;
+      --accent-ai: #f97373;
+      --accent-hybrid: #fbbf24;
+      --accent-legacy: #e5e7eb;
+      --radius-card: 12px;
+      --radius-pill: 999px;
+      --shadow-soft: 0 10px 25px rgba(15, 23, 42, 0.08);
+      --font-sans: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+        sans-serif;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg);
+      color: var(--text-main);
+      padding: 24px;
+    }
+    .layout {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+    .app-shell {
+      display: grid;
+      grid-template-columns: minmax(0, 2.2fr) minmax(320px, 1.1fr);
+      gap: 20px;
+    }
+    @media (max-width: 900px) {
+      .app-shell { grid-template-columns: 1fr; }
+    }
+    .card {
+      background: var(--card-bg);
+      border-radius: var(--radius-card);
+      border: 1px solid var(--border-subtle);
+      box-shadow: var(--shadow-soft);
+      padding: 20px 22px;
+    }
+    .card-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 14px;
+    }
+    .card-title {
+      font-size: 20px;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+    }
+    .card-subtitle {
+      font-size: 13px;
+      color: var(--text-muted);
+      margin-top: 4px;
+    }
+    .badge {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      padding: 4px 10px;
+      border-radius: var(--radius-pill);
+      border: 1px solid var(--border-subtle);
+      background: #f9fafb;
+      color: var(--text-muted);
+    }
+    /* Stats row */
+    .stats-row {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 12px;
+    }
+    @media (max-width: 800px) {
+      .stats-row { grid-template-columns: 1fr; }
+    }
+    .stat {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+    .stat-label {
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.09em;
+      color: var(--text-muted);
+    }
+    .stat-value-row {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 6px;
+    }
+    .stat-value {
+      font-size: 22px;
+      font-weight: 600;
+    }
+    .stat-caption {
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .stat-chart {
+      margin-top: 4px;
+      height: 26px;
+      display: flex;
+      align-items: flex-end;
+      gap: 3px;
+    }
+    .spark-bar {
+      flex: 1;
+      border-radius: 4px 4px 0 0;
+      background: rgba(148, 163, 184, 0.6);
+    }
+    .percent-bar {
+      width: 100%;
+      height: 10px;
+      border-radius: 999px;
+      background: #e5e7eb;
+      overflow: hidden;
+    }
+    .percent-fill {
+      height: 100%;
+      width: 0;
+      border-radius: 999px;
+      transition: width 0.25s ease-out;
+    }
+    .percent-fill.ai { background: #22c55e; }
+    .percent-fill.hybrid { background: #fbbf24; }
+    /* Legend and map */
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px 18px;
+      margin-top: 10px;
+      margin-bottom: 12px;
+    }
+    .legend-row {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .legend-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 4px;
+    }
+    .dot-human { background: var(--accent-human); }
+    .dot-ai { background: var(--accent-ai); }
+    .dot-hybrid { background: var(--accent-hybrid); }
+    .dot-legacy { background: var(--accent-legacy); }
+    .map-wrapper {
+      margin-top: 8px;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      padding: 14px;
+      background: #f9fafb;
+      min-height: 260px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .map-grid {
+      display: grid;
+      grid-template-columns: repeat(40, 14px);
+      gap: 3px;
+      justify-content: center;
+    }
+    @media (max-width: 700px) {
+      .map-grid {
+        grid-template-columns: repeat(24, 14px);
+      }
+    }
+    .cell {
+      width: 14px;
+      height: 14px;
+      border-radius: 3px;
+      background: var(--accent-legacy);
+      cursor: pointer;
+      transition: transform 0.07s ease-out, box-shadow 0.07s ease-out, opacity 0.15s ease-out;
+    }
+    .cell[data-origin="human"] { background: var(--accent-human); }
+    .cell[data-origin="ai"] { background: var(--accent-ai); }
+    .cell[data-origin="hybrid"] { background: var(--accent-hybrid); }
+    .cell:hover {
+      transform: scale(1.5);
+      box-shadow: 0 0 0 1px #ffffff, 0 0 0 2px rgba(15, 23, 42, 0.2);
+      z-index: 2;
+      position: relative;
+    }
+    .hint {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+    }
+    .timeline-bar {
+      margin-top: 14px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-wrap: wrap;
+    }
+    .timeline-bar input[type="range"] {
+      flex: 1;
+      min-width: 80px;
+    }
+    /* Detail / sidebar */
+    .detail-section-title {
+      font-size: 13px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: var(--text-muted);
+      margin-bottom: 8px;
+    }
+    .meta-row {
+      display: flex;
+      justify-content: space-between;
+      font-size: 13px;
+      margin-bottom: 6px;
+    }
+    .meta-label { color: var(--text-muted); }
+    .meta-value { font-weight: 500; }
+    .file-path {
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+        "Liberation Mono", "Courier New", monospace;
+      font-size: 13px;
+      background: #f3f4f6;
+      padding: 4px 8px;
+      border-radius: 6px;
+      display: inline-block;
+    }
+    .prompt {
+      margin-top: 6px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      background: #f9fafb;
+      border: 1px solid var(--border-subtle);
+      font-size: 13px;
+      line-height: 1.4;
+      white-space: pre-wrap;
+    }
+    .muted-block {
+      margin-top: 10px;
+      font-size: 12px;
+      color: var(--text-muted);
+      line-height: 1.5;
+      background: #f9fafb;
+      border-radius: 8px;
+      padding: 10px 12px;
+      border: 1px dashed var(--border-subtle);
+    }
+    .pill {
+      padding: 3px 10px;
+      border-radius: var(--radius-pill);
+      font-size: 11px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid var(--border-subtle);
+      background: #f9fafb;
+      color: var(--text-muted);
+      margin-right: 6px;
+      margin-top: 4px;
+    }
+    .pill-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+    }
+    .pill-dot.human { background: var(--accent-human); }
+    .pill-dot.ai { background: var(--accent-ai); }
+    .pill-dot.hybrid { background: var(--accent-hybrid); }
+    /* extra sidebar lists */
+    .mini-section {
+      margin-top: 18px;
+    }
+    .mini-list {
+      margin-top: 6px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .mini-list-item {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 4px;
+    }
+    .mini-label { }
+    .mini-value { font-weight: 500; }
+    /* tooltip for sparkline */
+    .tooltip {
+      position: fixed;
+      padding: 6px 8px;
+      border-radius: 6px;
+      background: #111827;
+      color: #ffffff;
+      font-size: 11px;
+      pointer-events: none;
+      opacity: 0;
+      transform: translate(-50%, -120%);
+      transition: opacity 0.05s ease-out;
+      z-index: 9999;
+      white-space: nowrap;
+    }
+  </style>
+</head>
+<body>
+  <div class="layout">
+    <!-- Top stats card -->
+    <section class="card">
+      <div class="card-header">
+        <div>
+          <div class="card-title">Senval Repository Overview</div>
+          <div class="card-subtitle">
+            High level view of AI contribution, hybrid code and human effort equivalence.
+          </div>
+        </div>
+        <div class="badge">Demo metrics</div>
+      </div>
+      <div class="stats-row">
+        <div class="stat">
+          <div class="stat-label">Total HEE (last 30 days)</div>
+          <div class="stat-value-row">
+            <div class="stat-value" id="statHeeTotal">–</div>
+          </div>
+          <div class="stat-chart" id="heeSpark"></div>
+          <div class="stat-caption">Estimated human-hours of work performed by agents.</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">AI vs human contribution</div>
+          <div class="stat-value-row">
+            <div class="stat-value" id="statAiShare">–</div>
+          </div>
+          <div class="stat-chart">
+            <div class="percent-bar">
+              <div class="percent-fill ai" id="aiPercentFill"></div>
+            </div>
+          </div>
+          <div class="stat-caption" id="statAiCaption">Share of activity attributed to AI-generated changes.</div>
+        </div>
+        <div class="stat">
+          <div class="stat-label">Hybrid code ratio</div>
+          <div class="stat-value-row">
+            <div class="stat-value" id="statHybrid">–</div>
+          </div>
+          <div class="stat-chart">
+            <div class="percent-bar">
+              <div class="percent-fill hybrid" id="hybridPercentFill"></div>
+            </div>
+          </div>
+          <div class="stat-caption">Portion of files touched by both human and AI in this period.</div>
+        </div>
+      </div>
+    </section>
+
+    <div class="app-shell">
+      <!-- Map card -->
+      <section class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Senval Code Provenance Map</div>
+            <div class="card-subtitle">
+              Visual x-ray of human, AI and hybrid authored code across this repository.
+            </div>
+          </div>
+          <div class="badge">Prototype</div>
+        </div>
+
+        <div class="legend">
+          <div class="legend-row">
+            <span class="legend-dot dot-human"></span>
+            <span>Human authored</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-dot dot-ai"></span>
+            <span>AI authored (agent)</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-dot dot-hybrid"></span>
+            <span>Hybrid (human + AI)</span>
+          </div>
+          <div class="legend-row">
+            <span class="legend-dot dot-legacy"></span>
+            <span>Legacy / untouched</span>
+          </div>
+        </div>
+
+        <div class="map-wrapper">
+          <div class="map-grid" id="mapGrid">
+            <!-- cells from JS -->
+          </div>
+        </div>
+
+        <div class="timeline-bar">
+          <span>Window</span>
+          <input type="range" min="0" max="30" value="0" id="timeFrom" />
+          <span>to</span>
+          <input type="range" min="0" max="30" value="30" id="timeTo" />
+          <span>days ago</span>
+        </div>
+
+        <p class="hint">
+          Adjust the window to focus on a specific period. Click a square to inspect its file,
+          authorship history and agent context.
+        </p>
+      </section>
+
+      <!-- Detail sidebar -->
+      <aside class="card">
+        <div class="card-header">
+          <div>
+            <div class="card-title">Selection details</div>
+            <div class="card-subtitle" id="detailSubtitle">
+              Click any colored square on the map to inspect.
+            </div>
+          </div>
+        </div>
+
+        <div id="detailContent" style="display:none;">
+          <div class="detail-section-title">File</div>
+          <div class="file-path" id="detailPath"></div>
+
+          <div class="detail-section-title" style="margin-top:16px;">Authorship</div>
+          <div class="meta-row">
+            <span class="meta-label">Origin</span>
+            <span class="meta-value" id="detailOrigin"></span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Last modified</span>
+            <span class="meta-value" id="detailModified"></span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Lines of code</span>
+            <span class="meta-value" id="detailLoc"></span>
+          </div>
+
+          <div class="detail-section-title" style="margin-top:16px;">Agent context</div>
+          <div class="meta-row">
+            <span class="meta-label">Agent</span>
+            <span class="meta-value" id="detailAgent"></span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Model</span>
+            <span class="meta-value" id="detailModel"></span>
+          </div>
+          <div class="meta-row">
+            <span class="meta-label">Operation ID</span>
+            <span class="meta-value" id="detailOpId"></span>
+          </div>
+
+          <div class="detail-section-title" style="margin-top:16px;">Prompt snapshot</div>
+          <div class="prompt" id="detailPrompt"></div>
+
+          <div class="detail-section-title" style="margin-top:16px;">Tags</div>
+          <div id="detailTags"></div>
+
+          <div class="muted-block">
+            This is a static prototype. In a live Senval deployment this panel
+            would deep-link to the full agent operation log, associated pull
+            request, tests, and review comments.
+          </div>
+
+          <div class="mini-section">
+            <div class="detail-section-title">Repository hotspots</div>
+            <div class="mini-list" id="moduleList">
+              <!-- filled by JS -->
+            </div>
+          </div>
+
+          <div class="mini-section">
+            <div class="detail-section-title">Top agents by HEE</div>
+            <div class="mini-list" id="agentList">
+              <!-- filled by JS -->
+            </div>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </div>
+
+  <script>
+    const grid = document.getElementById("mapGrid");
+    const totalCells = 400; // slightly more cells now that grid is larger
+
+    const fakeFiles = [
+      "/src/payments/PaymentService.ts",
+      "/src/payments/CurrencyMapper.ts",
+      "/src/api/OrderController.ts",
+      "/src/api/Healthcheck.ts",
+      "/src/auth/LoginHandler.ts",
+      "/src/auth/SessionStore.ts",
+      "/src/billing/InvoiceGenerator.ts",
+      "/src/ui/CheckoutPage.tsx",
+      "/src/ui/components/Button.tsx",
+      "/src/ui/components/PriceTag.tsx",
+      "/infra/terraform/main.tf",
+      "/infra/k8s/deployment.yaml"
+    ];
+
+    const fakePrompts = [
+      "Refactor the payment service to support multi-currency settlements and add logging.",
+      "Update API controller to validate payloads and return typed error responses.",
+      "Migrate legacy authentication flow to JWT-based sessions while keeping cookie support.",
+      "Extract shared UI components and improve accessibility on the checkout screen.",
+      "Modernize infrastructure configuration and add staging environment support.",
+      "Add optimistic UI updates to checkout and handle network errors gracefully."
+    ];
+
+    const fakeTags = [
+      "payments", "api", "auth", "ui", "infrastructure", "refactor", "security", "performance"
+    ];
+
+    function randomChoice(arr) {
+      return arr[Math.floor(Math.random() * arr.length)];
+    }
+
+    function randomOrigin() {
+      const roll = Math.random();
+      if (roll < 0.55) return "human";
+      if (roll < 0.80) return "ai";
+      return "hybrid";
+    }
+
+    function originLabel(origin) {
+      if (origin === "human") return "Human authored";
+      if (origin === "ai") return "AI authored (agent)";
+      return "Hybrid (human + AI)";
+    }
+
+    function randomDateWithinDays(days) {
+      const now = new Date();
+      const offset = Math.floor(Math.random() * days);
+      now.setDate(now.getDate() - offset);
+      return now.toISOString().slice(0, 10);
+    }
+
+    function randomLoc() {
+      return 40 + Math.floor(Math.random() * 260);
+    }
+
+    function randomSubset(arr, maxCount) {
+      const shuffled = [...arr].sort(() => 0.5 - Math.random());
+      return shuffled.slice(0, Math.floor(1 + Math.random() * maxCount));
+    }
+
+    function moduleFromPath(path) {
+      if (path.includes("/payments") || path.includes("/billing")) return "payments";
+      if (path.includes("/auth")) return "auth";
+      if (path.includes("/api")) return "api";
+      if (path.includes("/ui")) return "ui";
+      if (path.includes("/infra") || path.includes("terraform") || path.includes("k8s")) return "infra";
+      return "other";
+    }
+
+    function typeWeightFromPath(path) {
+      if (path.includes("/infra") || path.includes("terraform") || path.includes("k8s")) return 1.3;
+      if (path.includes("/ui")) return 0.8;
+      return 1.0;
+    }
+
+    function complexityWeight(loc) {
+      if (loc > 220) return 1.6;
+      if (loc > 140) return 1.3;
+      if (loc > 80) return 1.1;
+      return 1.0;
+    }
+
+    // Create grid cells with fake metadata
+    for (let i = 0; i < totalCells; i++) {
+      const origin = randomOrigin();
+      const cell = document.createElement("div");
+      cell.className = "cell";
+      cell.dataset.origin = origin;
+
+      const file = randomChoice(fakeFiles);
+      const prompt = randomChoice(fakePrompts);
+      const agent = origin === "human" ? "" : randomChoice([
+        "senval-agent-alpha",
+        "senval-refactor-bot",
+        "senval-test-fixer"
+      ]);
+      const model = origin === "human" ? "" : randomChoice([
+        "gpt-5.1-code",
+        "claude-code-next",
+        "openrouter-dev-model"
+      ]);
+      const opId = origin === "human"
+        ? ""
+        : "op_" + Math.random().toString(36).substring(2, 10);
+
+      const modified = randomDateWithinDays(30);
+      const loc = randomLoc();
+      const tags = randomSubset(fakeTags, 3).join(",");
+      const agePercent = Math.floor(Math.random() * 101); // legacy artifact, not used for filter
+
+      cell.dataset.path = file;
+      cell.dataset.prompt = prompt;
+      cell.dataset.agent = agent;
+      cell.dataset.model = model;
+      cell.dataset.opId = opId;
+      cell.dataset.modified = modified;
+      cell.dataset.loc = loc;
+      cell.dataset.tags = tags;
+      cell.dataset.agePercent = agePercent;
+
+      cell.title = file + "\n" + originLabel(origin);
+
+      cell.addEventListener("click", () => showDetails(cell));
+
+      grid.appendChild(cell);
+    }
+
+    const detailSubtitle = document.getElementById("detailSubtitle");
+    const detailContent = document.getElementById("detailContent");
+    const detailPath = document.getElementById("detailPath");
+    const detailOrigin = document.getElementById("detailOrigin");
+    const detailModified = document.getElementById("detailModified");
+    const detailLoc = document.getElementById("detailLoc");
+    const detailAgent = document.getElementById("detailAgent");
+    const detailModel = document.getElementById("detailModel");
+    const detailOpId = document.getElementById("detailOpId");
+    const detailPrompt = document.getElementById("detailPrompt");
+    const detailTags = document.getElementById("detailTags");
+    const moduleList = document.getElementById("moduleList");
+    const agentList = document.getElementById("agentList");
+
+    function showDetails(cell) {
+      const origin = cell.dataset.origin;
+      detailSubtitle.textContent = "Inspecting selected code segment.";
+      detailContent.style.display = "block";
+
+      detailPath.textContent = cell.dataset.path;
+      detailOrigin.textContent = originLabel(origin);
+      detailModified.textContent = cell.dataset.modified;
+      detailLoc.textContent = cell.dataset.loc + " LOC";
+
+      if (origin === "human") {
+        detailAgent.textContent = "—";
+        detailModel.textContent = "—";
+        detailOpId.textContent = "—";
+        detailPrompt.textContent =
+          "This segment is currently attributed to a human author. No agent context was recorded for its last change.";
+      } else {
+        detailAgent.textContent = cell.dataset.agent || "senval-agent-alpha";
+        detailModel.textContent = cell.dataset.model || "gpt-5.1-code";
+        detailOpId.textContent = cell.dataset.opId || "op_demo123";
+        detailPrompt.textContent = cell.dataset.prompt;
+      }
+
+      // tags
+      detailTags.innerHTML = "";
+      const tags = (cell.dataset.tags || "").split(",").filter(Boolean);
+      tags.forEach(tag => {
+        const pill = document.createElement("span");
+        pill.className = "pill";
+        const dot = document.createElement("span");
+        dot.className = "pill-dot " +
+          (origin === "human" ? "human" : origin === "ai" ? "ai" : "hybrid");
+        pill.appendChild(dot);
+        const label = document.createElement("span");
+        label.textContent = tag;
+        pill.appendChild(label);
+        detailTags.appendChild(pill);
+      });
+    }
+
+    // HEE and aggregate stats computation
+    const cells = Array.from(document.querySelectorAll(".cell"));
+    const statHeeTotal = document.getElementById("statHeeTotal");
+    const statAiShare = document.getElementById("statAiShare");
+    const statAiCaption = document.getElementById("statAiCaption");
+    const statHybrid = document.getElementById("statHybrid");
+    const aiPercentFill = document.getElementById("aiPercentFill");
+    const hybridPercentFill = document.getElementById("hybridPercentFill");
+
+    function computeHeeForCell(cell) {
+      const origin = cell.dataset.origin;
+      if (origin === "human") return 0;
+      const loc = parseInt(cell.dataset.loc || "0", 10);
+      const path = cell.dataset.path || "";
+      const typeWeight = typeWeightFromPath(path);
+      const cx = complexityWeight(loc);
+      const base = loc * 0.02 + 0.5; // rough stand-in for LOC + file factor
+      return base * cx * typeWeight;
+    }
+
+    function buildHeeSparkline(containerId, series) {
+      const container = document.getElementById(containerId);
+      if (!container) return;
+      container.innerHTML = "";
+      const max = Math.max(...series, 1);
+      const days = series.length;
+      const today = new Date();
+
+      series.forEach((value, idx) => {
+        const bar = document.createElement("div");
+        bar.className = "spark-bar";
+        const height = (value / max) * 100;
+        bar.style.height = height.toFixed(0) + "%";
+        bar.style.background = "#f97373cc";
+
+        const date = new Date();
+        date.setDate(today.getDate() - (days - 1 - idx));
+        const labelDate = date.toISOString().slice(0, 10);
+        bar.dataset.value = value.toFixed(1);
+        bar.dataset.date = labelDate;
+
+        bar.addEventListener("mouseenter", (e) => {
+          tooltip.style.opacity = "1";
+          tooltip.textContent = labelDate + " – " + value.toFixed(1) + " h HEE";
+          tooltip.style.left = e.clientX + "px";
+          tooltip.style.top = e.clientY + "px";
+        });
+        bar.addEventListener("mousemove", (e) => {
+          tooltip.style.left = e.clientX + "px";
+          tooltip.style.top = e.clientY + "px";
+        });
+        bar.addEventListener("mouseleave", () => {
+          tooltip.style.opacity = "0";
+        });
+
+        container.appendChild(bar);
+      });
+    }
+
+    function computeStats() {
+      const now = new Date();
+      let totalHee30 = 0;
+      let aiCount = 0;
+      let humanCount = 0;
+      let hybridCount = 0;
+      let totalContribCount = 0;
+
+      const moduleHee = {};
+      const agentHee = {};
+
+      cells.forEach(cell => {
+        const origin = cell.dataset.origin;
+        const modifiedStr = cell.dataset.modified;
+        const modDate = new Date(modifiedStr);
+        const daysDiff = (now - modDate) / (1000 * 60 * 60 * 24);
+        const isRecent = daysDiff <= 30;
+
+        if (origin === "human") humanCount++;
+        if (origin === "ai") aiCount++;
+        if (origin === "hybrid") hybridCount++;
+        if (origin !== "legacy") totalContribCount++;
+
+        if (isRecent && origin !== "human") {
+          const hee = computeHeeForCell(cell);
+          totalHee30 += hee;
+
+          const module = moduleFromPath(cell.dataset.path || "");
+          moduleHee[module] = (moduleHee[module] || 0) + hee;
+
+          const agent = cell.dataset.agent || "senval-agent-alpha";
+          if (agent && origin !== "human") {
+            agentHee[agent] = (agentHee[agent] || 0) + hee;
+          }
+        }
+      });
+
+      const aiShare = totalContribCount === 0 ? 0 : (aiCount + hybridCount) / totalContribCount;
+      const hybridShare = cells.length === 0 ? 0 : hybridCount / cells.length;
+
+      statHeeTotal.textContent = totalHee30.toFixed(1) + " h";
+      statAiShare.textContent = Math.round(aiShare * 100) + "% AI";
+      statAiCaption.textContent = "Across AI + hybrid authored segments in this repo.";
+      statHybrid.textContent = Math.round(hybridShare * 100) + "%";
+
+      if (aiPercentFill) {
+        aiPercentFill.style.width = Math.round(aiShare * 100) + "%";
+      }
+      if (hybridPercentFill) {
+        hybridPercentFill.style.width = Math.round(hybridShare * 100) + "%";
+      }
+
+      // populate module list
+      moduleList.innerHTML = "";
+      const modulesSorted = Object.entries(moduleHee).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      modulesSorted.forEach(([mod, hee]) => {
+        const row = document.createElement("div");
+        row.className = "mini-list-item";
+        const label = document.createElement("span");
+        label.className = "mini-label";
+        label.textContent = (mod === "other" ? "other modules" : "/src/" + mod);
+        const value = document.createElement("span");
+        value.className = "mini-value";
+        value.textContent = hee.toFixed(1) + " h";
+        row.appendChild(label);
+        row.appendChild(value);
+        moduleList.appendChild(row);
+      });
+
+      // populate agent list
+      agentList.innerHTML = "";
+      const agentsSorted = Object.entries(agentHee).sort((a, b) => b[1] - a[1]).slice(0, 4);
+      agentsSorted.forEach(([agent, hee]) => {
+        const row = document.createElement("div");
+        row.className = "mini-list-item";
+        const label = document.createElement("span");
+        label.className = "mini-label";
+        label.textContent = agent;
+        const value = document.createElement("span");
+        value.className = "mini-value";
+        value.textContent = hee.toFixed(1) + " h";
+        row.appendChild(label);
+        row.appendChild(value);
+        agentList.appendChild(row);
+      });
+
+      // build HEE sparkline for last 30 days using total
+      const days = 30;
+      const weights = [];
+      for (let i = 0; i < days; i++) {
+        weights.push(0.3 + Math.random());
+      }
+      const sumW = weights.reduce((a, b) => a + b, 0);
+      const series = weights.map(w => (totalHee30 * w) / (sumW || 1));
+      buildHeeSparkline("heeSpark", series);
+    }
+
+    // tooltip for sparkline
+    const tooltip = document.createElement("div");
+    tooltip.className = "tooltip";
+    document.body.appendChild(tooltip);
+
+    computeStats();
+
+    // time range sliders to filter by days ago
+    const timeFrom = document.getElementById("timeFrom");
+    const timeTo = document.getElementById("timeTo");
+
+    function applyTimeFilter() {
+      const now = new Date();
+      let from = parseInt(timeFrom.value, 10);
+      let to = parseInt(timeTo.value, 10);
+      if (Number.isNaN(from)) from = 0;
+      if (Number.isNaN(to)) to = 30;
+      const minDays = Math.min(from, to);
+      const maxDays = Math.max(from, to);
+
+      cells.forEach(c => {
+        const modDate = new Date(c.dataset.modified);
+        const daysDiff = (now - modDate) / (1000 * 60 * 60 * 24);
+        if (daysDiff >= minDays && daysDiff <= maxDays) {
+          c.style.opacity = "1";
+        } else {
+          c.style.opacity = "0.15";
+        }
+      });
+    }
+
+    timeFrom.addEventListener("input", applyTimeFilter);
+    timeTo.addEventListener("input", applyTimeFilter);
+    // initial filter (full range)
+    applyTimeFilter();
+  </script>
+</body>
+</html>
